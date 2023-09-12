@@ -13,7 +13,15 @@ library(RCurl)
 library(tidyverse)
 #install.packages("rms")#
 library(rms)
+#install.packages("Hmisc")#
+library(Hmisc)
+#install.packages("qreport")#
+library(qreport)
+#install.packages("plyr")#
+library(plyr)
 
+options(digits = 2)
+options(na.detail.response=TRUE, na.action = na.keep)
 
 ##Variable definitions##
 accessKey="Each person must provide their own API key here"
@@ -23,20 +31,28 @@ apiUrl="https://redcap.vanderbilt.edu/api/"
 ##Directory to save latex output##
 dir='Change this to the directory you wish to output the LaTeX files to'
 
+##Please change the following site variable to the name of your site according to the RedCap Instrument names##
+#The possible values are here:#
+#vumc, cchmc, chop, columbia, mgb, mphc, uab, uw, mt_sinai, nu#
+#Please note: The name MUST be enclosed by either single or double quotation marks#
+#exampleSite = 'uw'
+site='uw'
+
 ##Pull data##
 
 #First, we pull the list of all forms and then select the ones we need#
 forms=redcap_instruments(redcap_uri =  apiUrl, token =  accessKey)
 formNames=forms$data
-collapsedForms="prescreening_survey,primary_consent,uw_consent_part_2,baseline_survey_adult,pre_ror_adult"
+siteForm=paste(site, "_consent_part_2", sep='')
+collapsedForms=paste("prescreening_survey,primary_consent,", siteForm ,",baseline_survey_adult,pre_ror_adult", sep = '')
 #Using redcap_read we can pull the specific set of forms we just created#
-uwForms=redcap_read(redcap_uri =  apiUrl, token =  accessKey, forms_collapsed=collapsedForms)
-data=uwForms$data
+pulledForms=redcap_read(redcap_uri =  apiUrl, token =  accessKey, forms_collapsed=collapsedForms)
+data=pulledForms$data
 
 
 ##QC##
 #Select only participants who have fully consented#
-consented=data[data['primary_consent_complete']==2 | data['uw_consent_part_2_complete']==2| data['pre_ror_adult_complete']==2, ]
+consented=data[data['primary_consent_complete']==2 & data[paste(siteForm, "_complete", sep = '')]==2, ]
 
 ##Variable Selection##
 #Select variables of interest from taskforce meeting#
@@ -158,16 +174,12 @@ alcohol=consented$drink_containing_alcohol
 
 #Physical Activity#
 moderateActivities=consented$moderate_activities_such_a
-vigorousActivitiesDays=consented$days_vigorous_activities
-moderateActivityDays=consented$days_moderate_activities
-noActivityDays=consented$didn_t_do_work_or_activiti
 
-#Diet(Can't find)#
 
 
 ##Report making##
 #Combine variables into a single data frame#
-dataMatrix=cbind(id, height, weight, selfReportRace, education, alcohol, moderateActivities, vigorousActivitiesDays, moderateActivityDays, noActivityDays)
+dataMatrix=cbind(id, height, weight, selfReportRace, education, alcohol, moderateActivities)
 dataFrame=data.frame(dataMatrix)
 
 #Convert variables into usable data types#
@@ -177,9 +189,11 @@ dataFrame$selfReportRace=as.factor(dataFrame$selfReportRace)
 dataFrame$education=as.factor(dataFrame$education)
 dataFrame$alcohol=as.factor(dataFrame$alcohol)
 dataFrame$moderateActivities=as.factor(dataFrame$moderateActivities)
-dataFrame$moderateActivityDays=as.factor(dataFrame$moderateActivityDays)
-dataFrame$vigorousActivitiesDays=as.factor(dataFrame$vigorousActivitiesDays)
-dataFrame$noActivityDays=as.factor(dataFrame$noActivityDays)
+
+#Add labels to factor variables#
+dataFrame$education=mapvalues(dataFrame$education, from=levels(dataFrame$education), to=c('Some HS', 'HS/GED', 'Some college', "Bachelor's", 'Advanced degree') )
+dataFrame$alcohol=mapvalues(dataFrame$alcohol, from=levels(dataFrame$alcohol), to=c('Never', 'Monthly or less', '2-4 a month', '2-3 a week', '4 or more a week', 'Skip') )
+dataFrame$moderateActivities=mapvalues(dataFrame$moderateActivities, from=levels(dataFrame$moderateActivities), to=c('Limited a lot', 'Limited a little', 'Not limited') )
 
 str(dataFrame)
 
